@@ -18,37 +18,43 @@ def create_section(driver, section_name):
     actions = ActionChains(driver)
 
     try:
-        # Click the "Channels" header to open submenu
-        channels_header = WebDriverWait(driver, 15).until(
-            EC.element_to_be_clickable((By.XPATH, "//span[text()='Channels']/ancestor::button"))
+        # Click "Channels" header
+        channels_header = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-qa='section_heading_button__channels']"))
         )
         channels_header.click()
         time.sleep(1)
 
-        # Hover over the "Create" menu item
-        create_menu_item = WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located((By.XPATH, "//div[@role='menuitem']//span[text()='Create']"))
+        # Hover "Create" menu item via JavaScript to reliably open submenu
+        create_menu_item = WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.XPATH, "//div[contains(@class, 'c-menu_item__label') and text()='Create']"))
         )
-        actions.move_to_element(create_menu_item).perform()
+        driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));", create_menu_item)
         time.sleep(1)
 
-        # Click "Create section" from submenu
-        create_section_button = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//div[@role='menuitem']//span[text()='Create section']"))
+        # Find and directly click "Create section" button inside submenu
+        create_section_button = WebDriverWait(driver, 15).until(
+            EC.element_to_be_clickable((By.XPATH, "//div[contains(@class,'c-submenu__container')]//button[.//div[text()='Create section']]"))
         )
         create_section_button.click()
+        time.sleep(1)
 
-        # Enter the section name into the input
-        input_box = WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located((By.XPATH, "//input[@id='create_new_section_name_input']"))
+        # Enter section name
+        input_box = WebDriverWait(driver, 15).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, "input[data-qa='channel_selection_modal_input_text_input']"))
         )
         input_box.clear()
         input_box.send_keys(section_name)
-        input_box.send_keys(Keys.RETURN)
+
+        # Click "Create" confirmation button
+        create_btn = WebDriverWait(driver, 15).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-qa='channel_selection_modal_input_go']"))
+        )
+        create_btn.click()
         time.sleep(2)
 
     except TimeoutException:
-        raise Exception("Timeout while creating a new section. Verify Slack UI structure and XPath selectors.")
+        raise Exception("Timeout occurred. Slack submenu interaction failed.")
 
 def move_channels_to_section(driver, search_string, section_name):
     actions = ActionChains(driver)
