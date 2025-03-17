@@ -16,7 +16,6 @@ def login_to_slack(driver, workspace_url):
 
 def create_section(driver, section_name):
     actions = ActionChains(driver)
-
     try:
         # Click "Channels" header
         channels_header = WebDriverWait(driver, 20).until(
@@ -32,7 +31,7 @@ def create_section(driver, section_name):
         driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));", create_menu_item)
         time.sleep(1)
 
-        # Find and directly click "Create section" button inside submenu
+        # Click "Create section"
         create_section_button = WebDriverWait(driver, 15).until(
             EC.element_to_be_clickable((By.XPATH, "//div[contains(@class,'c-submenu__container')]//button[.//div[text()='Create section']]"))
         )
@@ -53,42 +52,57 @@ def create_section(driver, section_name):
         create_btn.click()
         time.sleep(2)
 
+        # Explicitly collapse the newly created section immediately
+        accordion_arrow = WebDriverWait(driver, 15).until(
+            EC.element_to_be_clickable((
+                By.XPATH,
+                f"//div[text()='{section_name}']/ancestor::div[contains(@class,'p-channel_sidebar__section_heading')]//i[@data-qa='channel-section-collapse']"
+            ))
+        )
+        accordion_arrow.click()
+        print(f"✅ Section '{section_name}' created and collapsed.")
+
     except TimeoutException:
-        raise Exception("Timeout occurred. Slack submenu interaction failed.")
+        raise Exception("❌ Timeout occurred during section creation or collapsing.")
 
 def move_channels_to_section(driver, search_string, section_name):
     actions = ActionChains(driver)
 
-    # Expand main Channels section if collapsed
     try:
-        channels_toggle = driver.find_element(By.XPATH, "//span[text()='Channels']/ancestor::button")
-        if channels_toggle.get_attribute("aria-expanded") == "false":
-            channels_toggle.click()
+        # Step 1: Reliably locate TARGET SECTION (previously confirmed working)
+        target_section = WebDriverWait(driver, 20).until(
+            EC.visibility_of_element_located((By.XPATH, f"//div[@class='overflow_ellipsis' and text()='{section_name}']"))
+        )
+        print("✅ Target section found.")
+
+        # Step 2: Grab ALL sidebar channels (assuming baseline channels are unique enough)
+        all_channels = WebDriverWait(driver, 20).until(
+            EC.presence_of_all_elements_located((
+                By.CSS_SELECTOR, "div.p-channel_sidebar__channel"
+            ))
+        )
+
+        # Filter channels clearly by search_string
+        matching_channels = [ch for ch in all_channels if search_string in ch.text]
+
+        if not matching_channels:
+            print("❌ No matching channels found.")
+            return
+
+        print(f"✅ Found {len(matching_channels)} matching channels.")
+
+        # Step 3: Drag each matching channel directly to the target section
+        for channel in matching_channels:
+            print(f"⚡ Moving channel: {channel.text}")
+            actions.click_and_hold(channel).pause(1).move_to_element(target_section).pause(1).release().perform()
             time.sleep(1)
-    except NoSuchElementException:
-        pass
 
-    # Find matching channels
-    try:
-        channels_section = driver.find_element(By.XPATH, "//span[text()='Channels']/ancestor::div[@role='group']")
-        matching_channels = channels_section.find_elements(By.XPATH, f".//span[contains(text(), '{search_string}')]/ancestor::a")
-    except NoSuchElementException:
-        raise Exception("Could not locate channels matching the provided substring.")
+        print("✅ Successfully moved all matching channels.")
 
-    if not matching_channels:
-        print("No matching channels found.")
-        return
-
-    # Locate target section
-    try:
-        target_section = driver.find_element(By.XPATH, f"//span[text()='{section_name}']/ancestor::div[@role='group']")
-    except NoSuchElementException:
-        raise Exception(f"Could not find the target section '{section_name}' to move channels into.")
-
-    for channel in matching_channels:
-        print(f"Moving channel: {channel.text}")
-        actions.click_and_hold(channel).pause(0.5).move_to_element(target_section).pause(1).release().perform()
-        time.sleep(1)
+    except TimeoutException:
+        raise Exception("❌ Timeout: Verify selectors and Slack UI state.")
+    except Exception as e:
+        raise Exception(f"❌ An unexpected error occurred: {e}")
 
 def main():
     workspace_url = "https://guardian-audits.slack.com"
